@@ -1,0 +1,66 @@
+---
+title: "Comparison of old USS pensions to new proposal"
+output: html_notebook
+author: Ian Sudbery
+date: 12/03/2018
+---
+
+Richard Wilkinson has done a rough and ready calculation of what the proposed USS pension deal of 12/03/2018  would mean in terms of the absolute maximum possible pension. His calculations can be found [here](http://rich-d-wilkinson.github.io/PensionCap.htm). The long and the short of it is that he finds that if someone were to come in at the max pensionable salary and stay there for 40 years the max pension they could get would be:
+
+```{r}
+(base <- 42000 * 40/85)
+```
+
+Now this ignores that fact that many of us don't get pensionable job until 30 years before retirement, and we don't generally start on £42k (the max DB salary), but still, we are talking upper bounds here.
+
+So this number does not look like the end of the world. But the problem is inflation - while £`r format(base, digits=1, big.mark=",")` might sound okay now, what will it be worth in 40 years time? The new proposal suggests that inflation link revaluation will be capped at 2.5%. Rich Wilkinson calculation what this would mean for pensions if CPI did the same for the next 40 years as it has done for the last. 
+
+```{r}
+cpi <- read.table("british_cpi.tsv", header=T, stringsAsFactors = F)
+cpi$CPI = as.numeric(sub("%","",cpi$CPI))
+truncated_cpi <- sapply(cpi$CPI,function(x)min(x,2.5))
+actual_pension_new_scheme <- base*prod(truncated_cpi/100+1)
+inflation_adjusted_pension <- base*prod(cpi$CPI/100+1)
+(real_terms_pension_new_scheme <- actual_pension_new_scheme/prod(cpi$CPI/100+1))
+
+```
+You can download the CPI figures [here](british_cpi.tsv). As with Richard Wilkinson's nubmers they come from [here](http://www.inflation.eu/inflation-rates/great-britain/historic-inflation/cpi-inflation-great-britain.aspx), via some excel wrangling. 
+
+So adjusting for inflation, the maximum possible defined benefit is £`r format(real_terms_pension_new_scheme, digits=0, big.mark=",")`. This is much less good!! But how does it compare to the current scheme? 
+
+Well in the current scheme, the pension is re-evaluated at the "official pension re-evaluation rate" used by government schemes. This boils down to CPI matching up to 5%, then half the increase up to 10%, then fixed. How does this play out? First lets calculate the effective CPIs under this scheme:
+
+```{r}
+revalue <- function(cpi) {
+  if (cpi < 5) return (cpi)
+  if (cpi < 15) {
+    return (5 + 0.5*(cpi-5))}
+  else {
+    return (10)
+  }
+}
+
+(effective_cpi_offical <- sapply(cpi$CPI, revalue))
+```
+
+These are very nearly the the real CPI values. Only in a few years did the CPI exceed 5%. Okay, lets assume our very luck new starter starts on 42k, but then never gets a pay increase. This seems like the fairest way to match the estimate above. What would their final defined benefit be worth in today's terms?
+
+Now under the old scheme, we accrued 75ths rather than 85ths. So the base pension is slightly different:
+
+```{r}
+(old_base <- 42000 * 40/75)
+
+```
+
+That's a difference from £`r format(base, digits=1, big.mark=",")` under the proposed system, but not a ruinous one. The real kicker is when we calculate the effective value in today's money:
+
+```{r}
+actual_pension_old_scheme <- old_base*prod(effective_cpi_offical/100+1)
+inflation_adjusted_pension <- old_base*prod(cpi$CPI/100+1)
+(real_terms_pension_old <- actual_pension_old_scheme/prod(cpi$CPI/100+1))
+```
+
+So under the old inflation adjustment scheme the real terms value of this person would have been £`r format(real_terms_pension_old, digits=1, big.mark=",")` rather than £`r format(real_terms_pension, digits=1, big.mark=",")` under the new scheme.
+
+This of course isn't fair because no one comes in with a salary of £42,000 and then stays there for a whole 40 years. And over the 42k cap they'd be contributing to a DC pot,  but it does show you how big an effect this 2.5% CPI cap has. Stay tuned for an update modelling a more realistic spine progression and including the DC pot. 
+
