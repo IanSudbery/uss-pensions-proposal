@@ -5,6 +5,8 @@ author: Ian Sudbery
 date: 12/03/2018
 ---
 
+You can find the repo for this markdown [here](https://github.com/IanSudbery/uss-pensions-proposal). Please feel free to fork and PR.
+
 Richard Wilkinson has done a rough and ready calculation of what the proposed USS pension deal of 12/03/2018  would mean in terms of the absolute maximum possible pension. His calculations can be found [here](http://rich-d-wilkinson.github.io/PensionCap.htm). The long and the short of it is that he finds that if someone were to come in at the max pensionable salary and stay there for 40 years the max pension they could get would be:
 
 ```{r}
