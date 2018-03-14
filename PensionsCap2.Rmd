@@ -5,9 +5,15 @@ author: Ian Sudbery
 date: 12/03/2018
 ---
 
+## Updated 13/03/2018
+
+See end for effect use of different historic period for setting CPI expectations.
+
+## Original
+
 You can find the repo for this markdown [here](https://github.com/IanSudbery/uss-pensions-proposal). Please feel free to fork and PR.
 
-Richard Wilkinson has done a rough and ready calculation of what the proposed USS pension deal of 12/03/2018  would mean in terms of the absolute maximum possible pension. His calculations can be found [here](http://rich-d-wilkinson.github.io/PensionCap.htm). The long and the short of it is that he finds that if someone were to come in at the max pensionable salary and stay there for 40 years the max pension they could get would be:
+Richard Wilkinson has done a rough and ready calculation of what the proposed USS pension deal of 12/03/2018  would mean in terms of the absolute maximum possible pension. His calculations can be found [here](http://rich-d-wilkinson.github.io/PensionCap.html). The long and the short of it is that he finds that if someone were to come in at the max pensionable salary and stay there for 40 years the max pension they could get would be:
 
 ```{r}
 (base <- 42000 * 40/85)
@@ -66,3 +72,69 @@ So under the old inflation adjustment scheme the real terms value of this person
 
 This of course isn't fair because no one comes in with a salary of £42,000 and then stays there for a whole 40 years. And over the 42k cap they'd be contributing to a DC pot,  but it does show you how big an effect this 2.5% CPI cap has. Stay tuned for an update modelling a more realistic spine progression and including the DC pot. 
 
+## Was the last 40 years an unfair period?
+
+It has been pointed out to me that using the last 40 years to model the effects of inflation might be an unfair period to use becuase of 1) out of the ordinary spikes in inflation in the late 70s and early 80s that are unlikely to be repeated, not least because 2) in 1992 we adopted a 2% inflation target. 
+
+Okay, what does this mean? What has CPI done in the last 40 years?
+
+```{r}
+library(ggplot2)
+ggplot(cpi, aes(Year, CPI)) + geom_point() + geom_smooth() + theme_bw()
+```
+ Okay, so the late 70s and early 80s really do look like a different world, and since '92, the 2% target has quite a good job of limiting inflation, with the exception of the time immediataely after the '08 crash. The realy question is whether the blip around '90 is part of the old regieme or the new. The peak might *look* big, but once the trend is removed, is it really much bigger than the the 2011 peak? 
+ 
+ What would make a more reasonable estimation of the effect of CPI. In the following I am going to use the following plan. I will build a predicted future inflation by randomly sampling inflation from the post-92 years 40 times (lets remember that 95-2008 was a period of almost unrivaled prosperity, so this is pretty generous). I'll do this 100 times and build up a picture of the possible futures. we can also include 88-92 to see what difference that makes.
+ 
+```{r}
+sample_future_pension <- function(base, sample_cpis, cpi_limit_function) {
+  cpis = sample(sample_cpis, 40, replace = T)
+  truncated_cpis = sapply(cpis, cpi_limit_function)
+  actual_pension <- base*prod(truncated_cpis/100+1)
+  real_terms_pension <- actual_pension/prod(cpis/100+1)
+  return(real_terms_pension)
+}
+
+proposed_cpi_limit = function(x) min(x, 2.5)
+
+simulated_futures <- data.frame(scheme = "proposed", historic_period="'92 and after",
+     samples = replicate(1000, sample_future_pension(base, cpi$CPI[cpi$Year >= 1992], proposed_cpi_limit)))
+simulated_futures <- rbind(simulated_futures, data.frame(scheme="proposed", historic_period="'89 and after",
+    samples = replicate(1000, sample_future_pension(base, cpi$CPI[cpi$Year >= 1988], proposed_cpi_limit))))
+simulated_futures <- rbind(simulated_futures, data.frame(scheme="proposed", historic_period="'08 and after",
+     samples = replicate(1000, sample_future_pension(base, cpi$CPI[cpi$Year >= 2008], proposed_cpi_limit))))
+simulated_futures <- rbind(simulated_futures, data.frame(scheme="current", historic_period="'92 and after", 
+     samples = replicate(1000, sample_future_pension(old_base, cpi$CPI[cpi$Year >= 1992], revalue))))
+simulated_futures <- rbind(simulated_futures, data.frame(scheme="current", historic_period="'89 and after", 
+     samples = replicate(1000, sample_future_pension(old_base, cpi$CPI[cpi$Year >= 1989], revalue))))
+simulated_futures <- rbind(simulated_futures, data.frame(scheme="current", historic_period="'08 and after", 
+     samples = replicate(1000, sample_future_pension(old_base, cpi$CPI[cpi$Year >= 2008], revalue))))
+
+ggplot(simulated_futures) + 
+  aes(samples, fill = scheme) + 
+  geom_histogram(bins=30) + 
+  facet_grid(historic_period~.) +
+  theme_bw() +
+  scale_fill_manual(values = c("darkblue", "grey50"), name = "Scheme") +
+  scale_x_continuous(labels=scales::dollar_format(prefix="£")) +
+  ggtitle("Predicted real-terms DB after 40 years on a 42k salary",
+          sub="Estimates from 1000 bootstraps of CPI from various historic periods") +
+  xlab("Defined Benefit pension value in real terms")
+```
+ 
+ The UUK side seem to be valuing their risk based on a 67% confidence. What happens if we do the same?
+ 
+```{r}
+library(dplyr)
+simulated_futures %>%
+  group_by(scheme, historic_period) %>%
+  summarise(Prudence_estimate=quantile(samples, 0.33)) %>%
+  mutate(Prudence_estimate=scales::dollar_format(prefix="£")(Prudence_estimate))
+```
+ The first thing to say is that this definately looks better than the above estimate using data from the last 40 years. But we are still looking at a £4.7-£6.7k per year loss. The second thing to say is that what inflation does really matters. Was 89-92 part of the old world order or was 1995-2008 a never to be repeated golden period? Is the post crash world the new normal? Or does the fact its "post-crash" make it an abnormal anomoly to be ignored?
+ 
+I suppose this is what we mean by "risk". This is a proposal to "share" risk between the employers and USS memebers. How much risk is transferred from employers to members under this scheme? I have no idea how to calculate this properly, but I'm going to have a go a reasoning this through a bit. Please someone tell me I'm wrong. 
+
+USS claim to have a £7.5bn deficit under the "de-risked" current scheme, with 350,000 members, thats a per-member deficit of £21,429. If you only include the 190,000 actively contriubting members, thats £39,473 each. They calculate this using a 67% prudence, and if we do the same with the new scheme, we find a range of losses, from £4.7k-£6.7k. Let us take the lowest figure, £4.7k. Someone with 40 years still to constribute would be 28 now, would retire at 68, and would expect to live another 19 years. So the loss to that person over those 19 years would be £89,300 (real terms), far more than the £21,429 deficit, and more than twice £39,473. 
+
+Same caveats apply: this is only considering the DB part of the scheme, and not what additional DC contributions might bring - its not a full pension modeller, although it would be nice to see these CPI simulations added to the existing pension modeller. Real people also start on less than £42k. Oh, and I could be getting it all wrong!
